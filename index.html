@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bionic Reader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Manrope:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4efe4;
+      --panel: rgba(255, 252, 245, 0.82);
+      --text: #24170d;
+      --muted: #6d5847;
+      --accent: #cc5c2f;
+      --accent-strong: #9f3f1b;
+      --line: rgba(36, 23, 13, 0.1);
+      --shadow: 0 24px 60px rgba(90, 51, 24, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: "Manrope", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(204, 92, 47, 0.18), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(44, 108, 82, 0.16), transparent 28%),
+        linear-gradient(135deg, #f8f4eb 0%, #efe5d3 48%, #f7f1e6 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(36, 23, 13, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(36, 23, 13, 0.03) 1px, transparent 1px);
+      background-size: 36px 36px;
+      mask-image: radial-gradient(circle at center, black 45%, transparent 90%);
+    }
+
+    .shell {
+      min-height: 100vh;
+      padding: 24px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 18px;
+    }
+
+    .topbar,
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand strong {
+      font-family: "Fraunces", serif;
+      font-size: 1.25rem;
+      letter-spacing: 0.02em;
+    }
+
+    .brand span,
+    .hint,
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .file-label,
+    button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+    }
+
+    .file-label {
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--text);
+    }
+
+    button {
+      background: white;
+      color: var(--text);
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #fff8f1;
+      border-color: transparent;
+    }
+
+    button.secondary {
+      background: rgba(44, 108, 82, 0.1);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .file-label:hover,
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(36, 23, 13, 0.2);
+    }
+
+    input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .reader {
+      position: relative;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .focus-ring {
+      position: absolute;
+      inset: 14% 10%;
+      border: 1px solid rgba(36, 23, 13, 0.08);
+      border-radius: 40px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.26));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    }
+
+    .word-stage {
+      position: relative;
+      width: min(88vw, 1100px);
+      min-height: 180px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      z-index: 1;
+    }
+
+    .word {
+      margin: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: "Fraunces", serif;
+      font-size: clamp(3rem, 9vw, 7rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+      text-wrap: nowrap;
+      animation: pulseIn 140ms ease;
+    }
+
+    .word strong {
+      font-weight: 800;
+      color: var(--accent-strong);
+    }
+
+    .empty {
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .statusbar {
+      font-size: 0.96rem;
+    }
+
+    .statusbar strong {
+      color: var(--accent-strong);
+    }
+
+    .statusbar .meta {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    @keyframes pulseIn {
+      from {
+        opacity: 0.45;
+        transform: scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        padding: 14px;
+      }
+
+      .topbar,
+      .statusbar {
+        padding: 14px;
+        border-radius: 18px;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .controls {
+        justify-content: stretch;
+      }
+
+      .file-label,
+      button {
+        width: 100%;
+        text-align: center;
+      }
+
+      .focus-ring {
+        inset: 20% 4%;
+      }
+
+      .word-stage {
+        min-height: 140px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar">
+      <div class="brand">
+        <strong>Bionic Reader</strong>
+        <span>Upload `.txt`, `.md`, or `.pdf` and read one centered word at 700 WPM.</span>
+      </div>
+
+      <div class="controls">
+        <label class="file-label" for="fileInput">Choose File</label>
+        <input id="fileInput" type="file" accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf">
+        <button id="startButton" class="primary" disabled>Start</button>
+        <button id="stopButton" class="secondary" disabled>Stop</button>
+        <button id="clearButton">Clear</button>
+      </div>
+    </section>
+
+    <section class="reader" aria-live="polite" aria-atomic="true">
+      <div class="focus-ring" aria-hidden="true"></div>
+      <div class="word-stage">
+        <p id="wordDisplay" class="word empty">Load a file to begin</p>
+      </div>
+    </section>
+
+    <section class="statusbar">
+      <span id="statusText">No file loaded.</span>
+      <div class="meta">
+        <span>Speed: <strong>700 WPM</strong></span>
+        <span id="progressText">Progress: 0 / 0</span>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs";
+
+    // pdf.js needs its worker file configured when loaded from a CDN.
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
+
+    const WORDS_PER_MINUTE = 700;
+    const MS_PER_WORD = Math.round(60000 / WORDS_PER_MINUTE);
+
+    const fileInput = document.getElementById("fileInput");
+    const startButton = document.getElementById("startButton");
+    const stopButton = document.getElementById("stopButton");
+    const clearButton = document.getElementById("clearButton");
+    const wordDisplay = document.getElementById("wordDisplay");
+    const statusText = document.getElementById("statusText");
+    const progressText = document.getElementById("progressText");
+
+    let words = [];
+    let currentIndex = 0;
+    let timerId = null;
+    let activeFileName = "";
+
+    fileInput.addEventListener("change", handleFileSelect);
+    startButton.addEventListener("click", startPlayback);
+    stopButton.addEventListener("click", stopPlayback);
+    clearButton.addEventListener("click", clearReader);
+
+    async function handleFileSelect(event) {
+      const [file] = event.target.files || [];
+      stopPlayback();
+
+      if (!file) {
+        return;
+      }
+
+      activeFileName = file.name;
+      setStatus(`Loading ${file.name}...`);
+      renderEmpty("Parsing...");
+
+      try {
+        const rawText = await extractText(file);
+        words = splitIntoWords(rawText);
+        currentIndex = 0;
+
+        if (!words.length) {
+          setStatus(`No readable text found in ${file.name}.`);
+          renderEmpty("No text found");
+          syncControls();
+          updateProgress();
+          return;
+        }
+
+        renderWord(words[currentIndex]);
+        setStatus(`Loaded ${file.name}. Ready to read.`);
+        updateProgress();
+        syncControls();
+      } catch (error) {
+        words = [];
+        currentIndex = 0;
+        setStatus(`Could not read ${file.name}. ${error.message}`);
+        renderEmpty("Load failed");
+        updateProgress();
+        syncControls();
+      }
+    }
+
+    async function extractText(file) {
+      const lowerName = file.name.toLowerCase();
+
+      if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
+        return file.text();
+      }
+
+      if (lowerName.endsWith(".pdf")) {
+        return extractPdfText(file);
+      }
+
+      throw new Error("Unsupported file type.");
+    }
+
+    async function extractPdfText(file) {
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      const pages = [];
+
+      // Each page is extracted separately so the final word stream keeps page order.
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        const pageText = content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ");
+        pages.push(pageText);
+      }
+
+      return pages.join("\n");
+    }
+
+    function splitIntoWords(text) {
+      return text
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(" ")
+        .map((word) => word.trim())
+        .filter(Boolean);
+    }
+
+    function startPlayback() {
+      if (!words.length || timerId) {
+        return;
+      }
+
+      if (currentIndex >= words.length) {
+        currentIndex = 0;
+      }
+
+      renderWord(words[currentIndex]);
+      setStatus(`Reading ${activeFileName || "document"} at ${WORDS_PER_MINUTE} WPM.`);
+      timerId = window.setInterval(advanceWord, MS_PER_WORD);
+      syncControls();
+    }
+
+    function stopPlayback() {
+      if (timerId) {
+        window.clearInterval(timerId);
+        timerId = null;
+      }
+
+      if (words.length) {
+        setStatus(`Paused ${activeFileName || "document"} at word ${currentIndex + 1}.`);
+      }
+
+      syncControls();
+    }
+
+    function advanceWord() {
+      currentIndex += 1;
+
+      if (currentIndex >= words.length) {
+        stopPlayback();
+        currentIndex = words.length - 1;
+        renderWord(words[currentIndex]);
+        setStatus(`Finished ${activeFileName || "document"}.`);
+        updateProgress();
+        syncControls();
+        return;
+      }
+
+      renderWord(words[currentIndex]);
+    }
+
+    function clearReader() {
+      stopPlayback();
+      words = [];
+      currentIndex = 0;
+      activeFileName = "";
+      fileInput.value = "";
+      renderEmpty("Load a file to begin");
+      setStatus("No file loaded.");
+      updateProgress();
+      syncControls();
+    }
+
+    function renderWord(word) {
+      wordDisplay.classList.remove("empty");
+      wordDisplay.innerHTML = buildBionicWord(word);
+      updateProgress();
+    }
+
+    function renderEmpty(message) {
+      wordDisplay.classList.add("empty");
+      wordDisplay.textContent = message;
+    }
+
+    function buildBionicWord(word) {
+      const cleanWord = word ?? "";
+      const length = cleanWord.length;
+
+      if (length <= 1) {
+        return escapeHtml(cleanWord);
+      }
+
+      // Bold the middle character for odd lengths and the middle pair for even lengths.
+      const middleSize = length % 2 === 0 ? 2 : 1;
+      const start = Math.max(0, Math.floor((length - middleSize) / 2));
+      const before = cleanWord.slice(0, start);
+      const middle = cleanWord.slice(start, start + middleSize);
+      const after = cleanWord.slice(start + middleSize);
+
+      return `${escapeHtml(before)}<strong>${escapeHtml(middle)}</strong>${escapeHtml(after)}`;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function setStatus(message) {
+      statusText.textContent = message;
+    }
+
+    function updateProgress() {
+      const displayedIndex = words.length ? currentIndex + 1 : 0;
+      progressText.textContent = `Progress: ${displayedIndex} / ${words.length}`;
+    }
+
+    function syncControls() {
+      const hasWords = words.length > 0;
+      startButton.disabled = !hasWords || Boolean(timerId);
+      stopButton.disabled = !timerId;
+    }
+  </script>
+</body>
+</html>
